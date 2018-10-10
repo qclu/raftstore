@@ -1,0 +1,39 @@
+# Master Configuration.
+
+[module]
+data-path = "/export/Logs/master/data"
+
+[log]
+log-path = "/export/Logs/master/log"
+#debug, info, warn, error
+level="debug"
+#debug, info, warn
+raft-level= "debug"
+
+[cluster]
+cluster-id="1"
+node-id=2
+raft-heartbeat-interval=500
+raft-retain-logs-count=20000
+fixed-replica-num=3
+
+[[cluster.nodes]]
+node-id=1
+host="127.0.0.1"
+http-port=8817
+raft-heartbeat-port=8816
+raft-replicate-port=8815
+
+[[cluster.nodes]]
+node-id=2
+host="127.0.0.1"
+http-port=8820
+raft-heartbeat-port=8819
+raft-replicate-port=8818
+
+[[cluster.nodes]]
+node-id=3
+host="127.0.0.1"
+http-port=8823
+raft-heartbeat-port=8822
+raft-replicate-port=8821

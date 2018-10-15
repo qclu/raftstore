@@ -26,7 +26,6 @@ type Server struct {
 	wg        sync.WaitGroup
 
 	apiServer *ApiServer
-	objCache  *sync.Map
 
 	idGenerator IDGenerator
 }
@@ -43,8 +42,6 @@ func (server *Server) Start(config *Config) (err error) {
 		server.Shutdown()
 		return err
 	}
-
-	server.objCache = new(sync.Map)
 
 	server.apiServer = NewApiServer(config, server)
 	if err := server.apiServer.Start(); err != nil {

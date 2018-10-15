@@ -123,7 +123,7 @@ func (id *StoreIdGenerator) Close() {
 }
 
 func (id *StoreIdGenerator) get(key string) ([]byte, error) {
-	value, err := id.rs.fsm.Get(key)
+	value, err := id.rs.fsm.Store.Get(key)
 	if err != nil {
 		return nil, err
 	}

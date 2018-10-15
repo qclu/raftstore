@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tiglabs/baudengine/proto"
 	"github.com/tiglabs/baudengine/util"
 	"github.com/tiglabs/baudengine/util/log"
@@ -125,10 +124,6 @@ func (s *ApiServer) ServeHTTP(w http.ResponseWriter, r *http.Request, params net
 	switch r.URL.Path {
 	case OBJ_CREATE:
 		s.handleObjCreate(w, r, params)
-	case OBJ_DELETE:
-		s.handleObjDelete(w, r, params)
-	case OBJ_UPDATE:
-		s.handleObjUpdate(w, r, params)
 	case OBJ_GET:
 		s.handleObjGet(w, r, params)
 	default:
@@ -153,10 +148,6 @@ func (s *ApiServer) handleObjCreate(w http.ResponseWriter, r *http.Request, para
 }
 
 func (s *ApiServer) createObj(objId, objVal string) error {
-	_, ok := s.srv.objCache.Load(objId)
-	if ok {
-		return errors.New("duplicate object")
-	}
 	raftKvData := &raftstore.RaftKvData{
 		Op: CMD_OP_PUT,
 		K:  objId,
@@ -167,15 +158,16 @@ func (s *ApiServer) createObj(objId, objVal string) error {
 		log.Error("fail to marshal raftKvData[%v]. err:[%v]", raftKvData, err)
 		return err
 	}
+	log.Info("create : %v", raftKvData)
 	_, err = s.srv.raftStore.raftPartition.Submit(cmd)
 	if err != nil {
 		log.Error("fail to put obj[%v] into store. err:[%v]", objId, err)
 		return pkg.ErrLocalZoneOpsFailed
 	}
-	s.srv.objCache.Store(objId, objVal)
 	return nil
 }
 
+/*
 func (s *ApiServer) handleObjDelete(w http.ResponseWriter, r *http.Request, params netutil.UriParams) {
 	objId, err := checkMissingParam(w, r, OBJ_ID)
 	if err != nil {
@@ -191,10 +183,6 @@ func (s *ApiServer) handleObjDelete(w http.ResponseWriter, r *http.Request, para
 }
 
 func (s *ApiServer) deleteObj(objId string) error {
-	_, ok := s.srv.objCache.Load(objId)
-	if !ok {
-		return errors.New("object not exist")
-	}
 	raftKvData := &raftstore.RaftKvData{
 		Op: CMD_OP_DEL,
 		K:  objId,
@@ -254,11 +242,12 @@ func (s *ApiServer) updateObj(objId, objVal string) error {
 	}
 	s.srv.objCache.Store(objId, objVal)
 	return nil
-}
+}*/
 
 func (s *ApiServer) handleObjGet(w http.ResponseWriter, r *http.Request, params netutil.UriParams) {
 	objId, err := checkMissingParam(w, r, OBJ_ID)
 	if err != nil {
+		sendReply(w, newHttpErrReply(err))
 		return
 	}
 
@@ -271,15 +260,12 @@ func (s *ApiServer) handleObjGet(w http.ResponseWriter, r *http.Request, params 
 }
 
 func (s *ApiServer) getObj(objId string) (objVal string, err error) {
-	var (
-		val interface{}
-		ok  bool
-	)
-	val, ok = s.srv.objCache.Load(objId)
-	if !ok {
-		return "", errors.New("object not exist")
+	var result interface{}
+	result, err = s.srv.raftStore.fsm.Store.Get(objId)
+	if err != nil {
+		return
 	}
-	objVal = val.(string)
+	objVal = string(result.([]byte))
 	return
 }
 

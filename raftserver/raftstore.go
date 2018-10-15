@@ -33,7 +33,7 @@ import (
 
 const (
 	CMD_OP_PUT uint32 = 0x01
-	CMD_OP_DEL uint32 = 0x02
+	CMD_OP_GET uint32 = 0x02
 )
 
 type LeaderInfo struct {
@@ -68,6 +68,7 @@ type RaftStore struct {
 }
 
 func NewRaftStore(config *Config) (*RaftStore, error) {
+	log.Debug("----------new raftstore")
 	rs := new(RaftStore)
 	rs.config = config
 	rs.nodeId = config.ClusterCfg.CurNode.NodeId
@@ -127,13 +128,21 @@ func (rs *RaftStore) CreateKvRaft() (err error) {
 		HeartbeatPort: rs.heartbeatPort,
 		ReplicatePort: rs.replicatePort,
 	}
-	log.Debug("create kv raft, raftCfg:[%v]", raftCfg)
+
+	log.Debug("---------------create kv raft, raftCfg:[%v]", raftCfg)
 	rs.raftStore, err = raftstore.NewRaftStore(raftCfg)
 	if err != nil {
 		return err
 	}
 	fsm := new(raftstore.RaftKvFsm)
-	fsm.Store = raftstore.NewRocksDBStore(rs.walDir)
+	if rs.config.ModuleCfg.StoreType == "rocksdb" {
+		log.Debug("init rocksdb")
+		fsm.Store = raftstore.NewRocksDBStore(rs.walDir)
+	} else {
+		log.Debug("init memdb")
+		fsm.Store = raftstore.NewMemDBStore()
+	}
+
 	fsm.RegisterLeaderChangeHandler(rs.handleLeaderChange)
 	fsm.RegisterPeerChangeHandler(rs.handlePeerChange)
 	fsm.RegisterApplyHandler(rs.handleApply)
@@ -157,10 +166,6 @@ func (rs *RaftStore) Stop() {
 		if rs.raftStore != nil {
 			rs.raftStore.Stop()
 			rs.raftStore = nil
-		}
-		if rs.fsm.Store != nil {
-			rs.fsm.Store.Close()
-			rs.fsm.Store = nil
 		}
 	}
 }
@@ -233,15 +238,15 @@ func (rs *RaftStore) handlePeerChange(confChange *proto.ConfChange) (err error) 
 func (rs *RaftStore) handleApply(cmd *raftstore.RaftKvData) (err error) {
 	switch cmd.Op {
 	case CMD_OP_PUT:
-		_, err := rs.fsm.Put(cmd.K, cmd.V)
+		_, err := rs.fsm.Store.Put(cmd.K, cmd.V)
 		if err != nil {
 			log.Error("rs.fsm.Store.Put err:[%v], key:[%s], value:[%v]", err, cmd.K, cmd.V)
 		}
-	case CMD_OP_DEL:
-		_, err := rs.fsm.Del(cmd.K)
-		if err != nil {
-			log.Error("rs.fsm.Store.Del err:[%v], key:[%s]", err, cmd.K)
-		}
+		//case CMD_OP_GET:
+		//	_, err := rs.fsm.Store.Get(cmd.K)
+		//	if err != nil {
+		//		log.Error("rs.fsm.Store.Del err:[%v], key:[%s]", err, cmd.K)
+		//	}
 	}
 	return nil
 }

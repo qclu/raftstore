@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"github.com/dustin/gojson"
 )
 
 var (
@@ -58,33 +59,19 @@ func main() {
 		obj_id:  objId,
 		obj_val: objVal,
 	}
-	fmt.Printf("params [%v]\n", param)
 	switch method {
 	case "get":
-		val, err := getObject(addr, param)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Println(val)
+		res := getObject(addr, param)
+		fmt.Println(res)
 	case "create":
-		err := createObject(addr, param)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println("Success")
+		res := createObject(addr, param)
+		fmt.Println(res)
 	case "delete":
-		err := deleteObject(addr, param)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println("Success")
+		res := deleteObject(addr, param)
+		fmt.Println(res)
 	case "update":
-		err := updateObject(addr, param)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println("Success")
+		res := updateObject(addr, param)
+		fmt.Println(res)
 	}
 }
 
@@ -133,46 +120,68 @@ func paramsToValues(p *Params) (values url.Values) {
 	return
 }
 
-func getObject(addr string, params *Params) (objVal string, err error) {
+type Reply struct {
+	Code int32  `json:"code"`
+	Msg  string `json:"msg"`
+	Data string `json:"data"`
+}
+
+func getObject(addr string, params *Params) (result string) {
+	var (
+		res []byte
+		err error
+	)
 	url := fmt.Sprintf("http://%s%s", addr, OBJ_GET)
-	var res []byte
 	res, err = httpDo(url, "GET", params)
 	if err != nil {
-		return
+		rpl := Reply{-1, err.Error(), ""}
+		res, _ = json.Marshal(rpl)
 	}
 
-	return string(res), nil
+	return string(res)
 }
 
-func createObject(addr string, params *Params) (err error) {
+func createObject(addr string, params *Params) (result string) {
+	var (
+		res []byte
+		err error
+	)
 	url := fmt.Sprintf("http://%s%s", addr, OBJ_CREATE)
-	var res []byte
 	res, err = httpDo(url, "POST", params)
 	if err != nil {
-		return
+		rpl := Reply{-1, err.Error(), ""}
+		res, _ = json.Marshal(rpl)
 	}
 
-	return nil
+	return string(res)
 }
 
-func updateObject(addr string, params *Params) (err error) {
+func updateObject(addr string, params *Params) (result string) {
+	var (
+		res []byte
+		err error
+	)
 	url := fmt.Sprintf("http://%s%s", addr, OBJ_UPDATE)
-	var res []byte
 	res, err = httpDo(url, "PUT", params)
 	if err != nil {
-		return
+		rpl := Reply{-1, err.Error(), ""}
+		res, _ = json.Marshal(rpl)
 	}
 
-	return nil
+	return string(res)
 }
 
-func deleteObject(addr string, params *Params) (err error) {
+func deleteObject(addr string, params *Params) (result string) {
+	var (
+		res []byte
+		err error
+	)
 	url := fmt.Sprintf("http://%s%s", addr, OBJ_DELETE)
-	var res []byte
 	res, err = httpDo(url, "POST", params)
 	if err != nil {
-		return
+		rpl := Reply{-1, err.Error(), ""}
+		res, _ = json.Marshal(rpl)
 	}
 
-	return nil
+	return string(res)
 }

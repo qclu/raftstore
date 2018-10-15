@@ -17,7 +17,6 @@ package raftstore
 import (
 	"fmt"
 	"github.com/tecbot/gorocksdb"
-	"strings"
 )
 
 //#cgo CFLAGS:-I/usr/local/include
@@ -101,90 +100,4 @@ func (rs *RocksDBStore) Get(key interface{}) (result interface{}, err error) {
 	valueByte := make([]byte, len(value))
 	copy(valueByte, value)
 	return valueByte, nil
-}
-
-func (rs *RocksDBStore) Seek(prefix interface{}) (result interface{}, err error) {
-	resultMap := make(map[string][]byte)
-
-	ro := gorocksdb.NewDefaultReadOptions()
-	ro.SetFillCache(false)
-
-	it := rs.db.NewIterator(ro)
-	defer it.Close()
-	it.Seek([]byte(prefix.(string)))
-	for it = it; it.Valid(); it.Next() {
-		key := it.Key().Data()
-		if !strings.HasPrefix(string(key), prefix.(string)) {
-			break
-		}
-		value := it.Value().Data()
-		valueByte := make([]byte, len(value))
-		copy(valueByte, value)
-		resultMap[string(key)] = valueByte
-		it.Key().Free()
-		it.Value().Free()
-	}
-	if err := it.Err(); err != nil {
-		return nil, err
-	}
-	result = resultMap
-	return result, nil
-}
-
-func (rs *RocksDBStore) DeleteKeyAndPutIndex(key string, cmdMap map[string][]byte) error {
-	wo := gorocksdb.NewDefaultWriteOptions()
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Clear()
-	wb.Delete([]byte(key))
-	for key, value := range cmdMap {
-		wb.Put([]byte(key), value)
-	}
-
-	if err := rs.db.Write(wo, wb); err != nil {
-		err = fmt.Errorf("action[deleteFromRocksDB],err:%v", err)
-		return err
-	}
-	return nil
-}
-
-func (rs *RocksDBStore) BatchPut(cmdMap map[string][]byte) error {
-	wo := gorocksdb.NewDefaultWriteOptions()
-	wb := gorocksdb.NewWriteBatch()
-	for key, value := range cmdMap {
-		wb.Put([]byte(key), value)
-	}
-	if err := rs.db.Write(wo, wb); err != nil {
-		err = fmt.Errorf("action[batchPutToRocksDB],err:%v", err)
-		return err
-	}
-	return nil
-}
-
-func (rs *RocksDBStore) BatchDel(cmdMap map[string][]byte) error {
-	wo := gorocksdb.NewDefaultWriteOptions()
-	wb := gorocksdb.NewWriteBatch()
-	for key, _ := range cmdMap {
-		wb.Delete([]byte(key))
-	}
-	if err := rs.db.Write(wo, wb); err != nil {
-		err = fmt.Errorf("action[batchDelToRocksDB],err:%v", err)
-		return err
-	}
-	return nil
-}
-
-func (rs *RocksDBStore) RocksDBSnapshot() *gorocksdb.Snapshot {
-	return rs.db.NewSnapshot()
-}
-
-func (rs *RocksDBStore) ReleaseSnapshot(snapshot *gorocksdb.Snapshot) {
-	rs.db.ReleaseSnapshot(snapshot)
-}
-
-func (rs *RocksDBStore) Iterator(snapshot *gorocksdb.Snapshot) *gorocksdb.Iterator {
-	ro := gorocksdb.NewDefaultReadOptions()
-	ro.SetFillCache(false)
-	ro.SetSnapshot(snapshot)
-
-	return rs.db.NewIterator(ro)
 }

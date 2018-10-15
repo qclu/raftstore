@@ -119,6 +119,7 @@ func (c *Config) adjust() {
 }
 
 type ModuleConfig struct {
+	StoreType string `toml:"store-type,omitempty" json:"store-type"`
 	DataPath string `toml:"data-path,omitempty" json:"data-path"`
 }
 

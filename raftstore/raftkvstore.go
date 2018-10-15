@@ -17,11 +17,8 @@ package raftstore
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/tecbot/gorocksdb"
-	"github.com/tiglabs/baudengine/util/log"
 	"github.com/tiglabs/raft"
 	"github.com/tiglabs/raft/proto"
-	"io"
 	"strconv"
 )
 
@@ -35,8 +32,20 @@ type RaftKvData struct {
 	V  []byte `json:"v"`
 }
 
+type StoreType int8
+
+const (
+	TypMemStore     = 0
+	TypRocksDBStore = 1
+)
+
+type StoreEngine interface {
+	Put(key, val interface{}) (interface{}, error)
+	Get(key interface{}) (interface{}, error)
+}
+
 type RaftKvFsm struct {
-	Store               *RocksDBStore
+	Store               StoreEngine
 	Applied             uint64
 	LeaderChangeHandler RaftLeaderChangeHandler
 	PeerChangeHandler   RaftPeerChangeHandler
@@ -290,7 +299,7 @@ func (rkf *RaftKvFsm) Restore() {
 }
 
 func (rkf *RaftKvFsm) restoreApplied() {
-	value, err := rkf.Get(RaftApplyId)
+	value, err := rkf.Store.Get(RaftApplyId)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to restore applied err:%v", err.Error()))
 	}
@@ -328,44 +337,12 @@ func (rkf *RaftKvFsm) ApplyMemberChange(confChange *proto.ConfChange, index uint
 	return
 }
 
-func (rkf *RaftKvFsm) Snapshot() (proto.Snapshot, error) {
-	snapshot := rkf.Store.RocksDBSnapshot()
-
-	iterator := rkf.Store.Iterator(snapshot)
-	iterator.SeekToFirst()
-	return &RaftKvSnapshot{
-		applied:   rkf.Applied,
-		snapshot:  snapshot,
-		raftKvFsm: rkf,
-		iterator:  iterator,
-	}, nil
+func (rkf *RaftKvFsm) Snapshot() (s proto.Snapshot, err error) {
+	return
 }
 
 func (rkf *RaftKvFsm) ApplySnapshot(peers []proto.Peer, iterator proto.SnapIterator) (err error) {
-	var data []byte
-	for err == nil {
-		if data, err = iterator.Next(); err != nil {
-			goto errDeal
-		}
-		cmd := &RaftKvData{}
-		if err = json.Unmarshal(data, cmd); err != nil {
-			goto errDeal
-		}
-		if _, err = rkf.Store.Put(cmd.K, cmd.V); err != nil {
-			goto errDeal
-		}
-
-		if err = rkf.ApplyHandler(cmd); err != nil {
-			goto errDeal
-		}
-	}
 	return
-errDeal:
-	if err == io.EOF {
-		return
-	}
-	log.Error(fmt.Sprintf("action[ApplySnapshot] failed,err:%v", err.Error()))
-	return err
 }
 
 func (rkf *RaftKvFsm) HandleFatalEvent(err *raft.FatalError) {
@@ -380,58 +357,15 @@ func (rkf *RaftKvFsm) HandleLeaderChange(leader uint64) {
 
 //snapshot interface
 type RaftKvSnapshot struct {
-	raftKvFsm *RaftKvFsm
-	applied   uint64
-	snapshot  *gorocksdb.Snapshot
-	iterator  *gorocksdb.Iterator
 }
 
 func (rks *RaftKvSnapshot) ApplyIndex() uint64 {
-	return rks.applied
+	return 0
 }
 
 func (rks *RaftKvSnapshot) Close() {
-	rks.raftKvFsm.Store.ReleaseSnapshot(rks.snapshot)
 }
 
 func (rks *RaftKvSnapshot) Next() (data []byte, err error) {
-	if rks.iterator.Valid() {
-		rks.iterator.Next()
-		return data, nil
-	}
-	return nil, io.EOF
-}
-
-type Store interface {
-	Put(key, val interface{}) (interface{}, error)
-	BatchPut(cmdMap map[string][]byte) (err error)
-	Get(key interface{}) (interface{}, error)
-	Seek(prefix interface{}) (interface{}, error)
-	Del(key interface{}) (interface{}, error)
-	BatchDel(cmdMap map[string][]byte) (err error)
-}
-
-//store interface
-func (rkf *RaftKvFsm) Put(key, val interface{}) (interface{}, error) {
-	return rkf.Store.Put(key, val)
-}
-
-func (rkf *RaftKvFsm) BatchPut(cmdMap map[string][]byte) (err error) {
-	return
-}
-
-func (rkf *RaftKvFsm) Get(key interface{}) (interface{}, error) {
-	return rkf.Store.Get(key)
-}
-
-func (rkf *RaftKvFsm) Seek(prefix interface{}) (interface{}, error) {
-	return nil, nil
-}
-
-func (rkf *RaftKvFsm) Del(key interface{}) (interface{}, error) {
-	return rkf.Store.Del(key)
-}
-
-func (rkf *RaftKvFsm) BatchDel(cmdMap map[string][]byte) (err error) {
 	return
 }
